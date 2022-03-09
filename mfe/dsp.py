@@ -172,17 +172,25 @@ if __name__ == "__main__":
 
             label, _ = filename.split(".", 1)
 
+            if label == "noise":
+                label_value = 0
+            elif label == "brighter":
+                label_value = 1
+            elif label == "dimmer":
+                label_value = 2
+            else: continue
+
             features = generate_features(3, args.draw_graphs, raw_features, raw_axes, frequency,
                 args.frame_length, args.frame_stride, args.num_filters, args.fft_length,
                 args.low_frequency, args.high_frequency, args.win_size, args.noise_floor_db)
 
             if features.shape == (2000,):
-                all_features.append(features)
-                labels.append(label)
+                all_features.append([features])
+                labels.append([label_value])
 
     except Exception as e:
         print(e, file=sys.stderr)
-        exit(1)
+        exit(1) 
     
     np.save(args.features, all_features)
     np.save(args.labels, labels)
