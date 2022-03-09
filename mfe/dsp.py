@@ -8,9 +8,10 @@ import matplotlib.pyplot as plt
 import time
 import matplotlib
 from scipy import signal as sn
+import scipy.io.wavfile as wav
 
 # Load our SpeechPy fork
-MODULE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', 'third_party', 'speechpy', '__init__.py')
+MODULE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'third_party', 'speechpy', '__init__.py')
 MODULE_NAME = 'speechpy'
 import importlib
 import sys
@@ -19,11 +20,11 @@ speechpy = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = speechpy
 spec.loader.exec_module(speechpy)
 
-matplotlib.use('Svg')
+# matplotlib.use('Svg')
 
 def generate_features(implementation_version, draw_graphs, raw_data, axes, sampling_freq,
                       frame_length, frame_stride, num_filters, fft_length,
-                      low_frequency, high_frequency, win_size, noise_floor_db):
+                      low_frequency, high_frequency, win_size, noise_floor_db, label, features_file, labels_file):
     if (implementation_version != 1 and implementation_version != 2 and implementation_version != 3):
         raise Exception('implementation_version should be 1, 2 or 3')
 
@@ -104,7 +105,8 @@ def generate_features(implementation_version, draw_graphs, raw_data, axes, sampl
 
             buf = io.BytesIO()
 
-            plt.savefig(buf, format='svg', bbox_inches='tight', pad_inches=0)
+            # plt.savefig(buf, format='svg', bbox_inches='tight', pad_inches=0)
+            plt.savefig(buf, bbox_inches='tight', pad_inches=0)
 
             buf.seek(0)
             image = (base64.b64encode(buf.getvalue()).decode('ascii'))
@@ -118,34 +120,49 @@ def generate_features(implementation_version, draw_graphs, raw_data, axes, sampl
                 'type': 'image'
             })
 
-    return {
-        'features': features.tolist(),
-        'graphs': graphs,
-        'fft_used': [ fft_length ],
-        'output_config': {
-            'type': 'spectrogram',
-            'shape': {
-                'width': width,
-                'height': height
-            }
-        }
-    }
+            # plt.savefig("myimg.svg")
+            plt.show()
+
+        with open(features_file, 'a') as features_csv:
+            np.savetxt(features_csv, [features], delimiter=',')
+        
+        with open(labels_file, 'a') as labels:
+            labels.write(label + "\n")
+
+    # return {
+    #     'features': features.tolist(),
+    #     # 'graphs': graphs,
+    #     'fft_used': [ fft_length ],
+    #     'output_config': {
+    #         'type': 'spectrogram',
+    #         'shape': {
+    #             'width': width,
+    #             'height': height
+    #         }
+    #     }
+    # }
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='MFCC script for audio data')
-    parser.add_argument('--features', type=str, required=True,
-                        help='Axis data as a flattened WAV file (pass as comma separated values)')
-    parser.add_argument('--axes', type=str, required=True,
-                        help='Names of the axis (pass as comma separated values)')
-    parser.add_argument('--frequency', type=float, required=True,
-                        help='Frequency in hz')
-    parser.add_argument('--draw-graphs', type=lambda x: (str(x).lower() in ['true','1', 'yes']), required=True,
+    # parser.add_argument('--features', type=str, required=True,
+    #                     help='Axis data as a flattened WAV file (pass as comma separated values)')
+    parser.add_argument('--in_dir', type=str, required=True, 
+                        help='Input directory')
+    parser.add_argument('--features', type=str, required=True, 
+                        help='Features output file')
+    parser.add_argument('--labels', type=str, required=True, 
+                        help='Labels output file')
+    # parser.add_argument('--axes', type=str, required=True,
+    #                     help='Names of the axis (pass as comma separated values)')
+    # parser.add_argument('--frequency', type=float, required=True,
+    #                     help='Frequency in hz')
+    parser.add_argument('--draw-graphs', type=lambda x: (str(x).lower() in ['true','1', 'yes']), default=False,
                         help='Whether to draw graphs')
     parser.add_argument('--frame_length', type=float, default=0.02,
                         help='The length of each frame in seconds')
     parser.add_argument('--frame_stride', type=float, default=0.02,
                         help='The step between successive frames in seconds')
-    parser.add_argument('--num_filters', type=int, default=32,
+    parser.add_argument('--num_filters', type=int, default=40,
                         help='The number of filters in the filterbank')
     parser.add_argument('--fft_length', type=int, default=256,
                         help='Number of FFT points')
@@ -160,17 +177,33 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    raw_features = np.array([float(item.strip()) for item in args.features.split(',')])
-    raw_axes = args.axes.split(',')
+    # raw_features = np.array([float(item.strip()) for item in args.features.split(',')])
+    # raw_axes = args.axes.split(',')
+
+    raw_axes = ['axes']
+    if os.path.exists(args.features):
+        os.remove(args.features)
+
+    if os.path.exists(args.labels):
+        os.remove(args.labels)
 
     try:
-        processed = generate_features(2, args.draw_graphs, raw_features, raw_axes, args.frequency,
-            args.frame_length, args.frame_stride, args.num_filters, args.fft_length,
-             args.low_frequency, args.high_frequency, args.win_size, args.noise_floor_db)
+        for filename in os.listdir(args.in_dir):
+            file = os.path.join(args.in_dir, filename)
 
-        print('Begin output')
-        print(json.dumps(processed))
-        print('End output')
+            print(args.features)
+
+            frequency, raw_features = wav.read(file)
+
+            label, _ = filename.split(".", 1)
+
+            processed = generate_features(3, args.draw_graphs, raw_features, raw_axes, frequency,
+                args.frame_length, args.frame_stride, args.num_filters, args.fft_length,
+                args.low_frequency, args.high_frequency, args.win_size, args.noise_floor_db, label, args.features, args.labels)
+
+            # print('Begin output')
+            # print(json.dumps(processed))
+            # print('End output')
     except Exception as e:
         print(e, file=sys.stderr)
         exit(1)
